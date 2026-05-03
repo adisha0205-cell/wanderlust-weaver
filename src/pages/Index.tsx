@@ -1,4 +1,6 @@
 import { FormEvent, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Loader2, Plane, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,19 +57,21 @@ const Index = () => {
       if (!res.ok) throw new Error("Request failed");
 
       const contentType = res.headers.get("content-type") || "";
-      let text = "";
+      let raw: any = null;
       if (contentType.includes("application/json")) {
-        const data = await res.json();
-        text =
-          typeof data === "string"
-            ? data
-            : data.itinerary ||
-              data.output ||
-              data.message ||
-              data.text ||
-              JSON.stringify(data, null, 2);
+        raw = await res.json();
       } else {
-        text = await res.text();
+        const t = await res.text();
+        try { raw = JSON.parse(t); } catch { raw = t; }
+      }
+      // Unwrap arrays (n8n often returns [{...}])
+      if (Array.isArray(raw)) raw = raw[0];
+      let text = "";
+      if (typeof raw === "string") {
+        text = raw;
+      } else if (raw && typeof raw === "object") {
+        text = raw.itinerary || raw.output || raw.message || raw.text || raw.data || "";
+        if (!text) text = JSON.stringify(raw, null, 2);
       }
       setItinerary(text || "No itinerary returned.");
     } catch (err) {
@@ -178,13 +182,19 @@ const Index = () => {
         </section>
 
         {itinerary && (
-          <section className="bg-white rounded-[20px] shadow-2xl p-8 sm:p-10 animate-fade-in-up">
-            <h2 className="text-2xl font-bold text-slate-900 mb-4">
+          <section className="bg-[#f9fafb] rounded-[20px] shadow-2xl p-8 sm:p-10 animate-fade-in-up">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6">
               Your Personalized Itinerary
             </h2>
-            <pre className="whitespace-pre-wrap break-words font-sans text-slate-700 leading-relaxed text-[15px]">
-              {itinerary}
-            </pre>
+            <article className="prose prose-slate max-w-none text-slate-800 text-[16px] leading-[1.8]
+              prose-headings:font-bold prose-headings:text-slate-900 prose-headings:mt-6 prose-headings:mb-3
+              prose-h1:text-2xl prose-h2:text-xl prose-h3:text-lg
+              prose-strong:text-slate-900 prose-strong:font-semibold
+              prose-ul:my-3 prose-ul:pl-6 prose-li:my-1 prose-li:marker:text-sky-500
+              prose-ol:my-3 prose-ol:pl-6
+              prose-p:my-3 prose-hr:my-6">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{itinerary}</ReactMarkdown>
+            </article>
             <Button
               onClick={reset}
               className="mt-6 w-full h-12 rounded-xl bg-[#3B82F6] hover:bg-[#2563EB] text-white font-semibold"
