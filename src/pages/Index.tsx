@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 
 const ENDPOINT =
-  "https://varied-officials-caribbean-nails.trycloudflare.com/webhook-test/travel-itinerary";
+  "https://shivangi0205.app.n8n.cloud/webhook/travel-itinerary";
 
 type TravelType = "Solo" | "Couple" | "Friends" | "Family" | "";
 
