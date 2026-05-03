@@ -57,19 +57,21 @@ const Index = () => {
       if (!res.ok) throw new Error("Request failed");
 
       const contentType = res.headers.get("content-type") || "";
-      let text = "";
+      let raw: any = null;
       if (contentType.includes("application/json")) {
-        const data = await res.json();
-        text =
-          typeof data === "string"
-            ? data
-            : data.itinerary ||
-              data.output ||
-              data.message ||
-              data.text ||
-              JSON.stringify(data, null, 2);
+        raw = await res.json();
       } else {
-        text = await res.text();
+        const t = await res.text();
+        try { raw = JSON.parse(t); } catch { raw = t; }
+      }
+      // Unwrap arrays (n8n often returns [{...}])
+      if (Array.isArray(raw)) raw = raw[0];
+      let text = "";
+      if (typeof raw === "string") {
+        text = raw;
+      } else if (raw && typeof raw === "object") {
+        text = raw.itinerary || raw.output || raw.message || raw.text || raw.data || "";
+        if (!text) text = JSON.stringify(raw, null, 2);
       }
       setItinerary(text || "No itinerary returned.");
     } catch (err) {
