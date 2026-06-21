@@ -13,11 +13,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import ComparePackages from "@/components/ComparePackages";
-
-const ENDPOINT =
-  "https://shivangi0205.app.n8n.cloud/webhook/travel-itinerary";
+import { supabase } from "@/integrations/supabase/client";
 
 type TravelType = "Solo" | "Couple" | "Friends" | "Family" | "";
+
+// Client-side guardrails (server re-validates)
+const LOCATION_RE = /^[\p{L}\p{N}\s,.\-'()&/]+$/u;
+const DATES_RE = /^[\p{L}\p{N}\s,.\-/:]+$/u;
 
 const Index = () => {
   const [destination, setDestination] = useState("");
@@ -39,41 +41,31 @@ const Index = () => {
     e.preventDefault();
     setError(null);
 
-    if (!destination.trim() || !dates.trim() || !travelType) {
+    const loc = destination.trim();
+    const dts = dates.trim();
+
+    if (!loc || !dts || !travelType) {
       setError("Please fill in all fields");
+      return;
+    }
+    if (loc.length > 100 || !LOCATION_RE.test(loc)) {
+      setError("Destination contains invalid characters or is too long.");
+      return;
+    }
+    if (dts.length > 50 || !DATES_RE.test(dts)) {
+      setError("Dates contain invalid characters or are too long.");
       return;
     }
 
     setLoading(true);
     try {
-      const res = await fetch(ENDPOINT, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          location: destination,
-          dates,
-          travelType,
-        }),
-      });
-      if (!res.ok) throw new Error("Request failed");
-
-      const contentType = res.headers.get("content-type") || "";
-      let raw: any = null;
-      if (contentType.includes("application/json")) {
-        raw = await res.json();
-      } else {
-        const t = await res.text();
-        try { raw = JSON.parse(t); } catch { raw = t; }
-      }
-      // Unwrap arrays (n8n often returns [{...}])
-      if (Array.isArray(raw)) raw = raw[0];
-      let text = "";
-      if (typeof raw === "string") {
-        text = raw;
-      } else if (raw && typeof raw === "object") {
-        text = raw.itinerary || raw.output || raw.message || raw.text || raw.data || "";
-        if (!text) text = JSON.stringify(raw, null, 2);
-      }
+      const { data, error: fnError } = await supabase.functions.invoke(
+        "travel-itinerary",
+        { body: { location: loc, dates: dts, travelType } },
+      );
+      if (fnError) throw fnError;
+      const text =
+        (data && typeof data === "object" && (data as any).itinerary) || "";
       setItinerary(text || "No itinerary returned.");
     } catch (err) {
       setError("Sorry, something went wrong. Please try again.");
