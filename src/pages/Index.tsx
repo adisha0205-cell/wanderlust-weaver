@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import ComparePackages from "@/components/ComparePackages";
 
 const ENDPOINT =
   "https://shivangi0205.app.n8n.cloud/webhook/travel-itinerary";
@@ -203,6 +204,8 @@ const Index = () => {
             </Button>
           </section>
         )}
+
+        <ComparePackages />
       </div>
     </main>
   );
