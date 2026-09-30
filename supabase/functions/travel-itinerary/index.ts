@@ -47,6 +47,34 @@ function rateLimit(ip: string): boolean {
   return true;
 }
 
+function cleanItinerary(value: unknown): string {
+  if (typeof value !== "string") return "";
+
+  const text = value.trim();
+  if (!text) return "";
+
+  try {
+    const nested: unknown = JSON.parse(text);
+    if (nested && typeof nested === "object") {
+      const record = nested as Record<string, unknown>;
+      const extracted = cleanItinerary(
+        record.itinerary ?? record.output ?? record.message ?? record.text ?? record.data,
+      );
+      if (extracted) return extracted;
+    }
+  } catch {
+    // Some n8n responses resemble JSON but contain unquoted markdown content.
+  }
+
+  return text
+    .replace(
+      /^\s*\{\s*["']?success["']?\s*:\s*true\s*,\s*["']?itinerary["']?\s*:\s*/i,
+      "",
+    )
+    .replace(/\s*\}\s*$/, "")
+    .trim();
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -132,7 +160,7 @@ Deno.serve(async (req) => {
     }
 
     const ct = upstream.headers.get("content-type") || "";
-    let raw: any;
+    let raw: unknown;
     if (ct.includes("application/json")) {
       raw = await upstream.json();
     } else {
@@ -147,16 +175,19 @@ Deno.serve(async (req) => {
 
     let itinerary = "";
     if (typeof raw === "string") {
-      itinerary = raw;
+      itinerary = cleanItinerary(raw);
     } else if (raw && typeof raw === "object") {
-      itinerary =
-        raw.itinerary ||
-        raw.output ||
-        raw.message ||
-        raw.text ||
-        raw.data ||
-        "";
-      if (!itinerary) itinerary = JSON.stringify(raw, null, 2);
+      const record = raw as Record<string, unknown>;
+      itinerary = cleanItinerary(
+        record.itinerary ?? record.output ?? record.message ?? record.text ?? record.data,
+      );
+    }
+
+    if (!itinerary) {
+      return new Response(JSON.stringify({ error: "No itinerary returned" }), {
+        status: 502,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ itinerary }), {
